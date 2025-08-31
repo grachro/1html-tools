@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>命名規則変換ツール（Naming Convention Converter Tool）</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --accent: #22d3ee;
+      --accent-2: #a78bfa;
+      --btn: #1f2937;
+      --btn-hover: #374151;
+      --ring: rgba(34, 211, 238, 0.35);
+    }
+    html[data-theme="dark"] {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --accent: #22d3ee;
+      --accent-2: #a78bfa;
+      --btn: #1f2937;
+      --btn-hover: #374151;
+      --ring: rgba(34, 211, 238, 0.35);
+    }
+    html[data-theme="light"] {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --muted: #64748b;
+      --text: #0f172a;
+      --accent: #06b6d4;
+      --accent-2: #8b5cf6;
+      --btn: #f1f5f9;
+      --btn-hover: #e2e8f0;
+      --ring: rgba(6, 182, 212, 0.35);
+    }
+    body {
+      margin: 0;
+      font: 16px/1.6 system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    header { margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center; }
+    h1 { margin:0; font-size:22px; }
+    .tools { font-size:13px; }
+    .panel { background: var(--panel); padding:16px; border-radius:12px; }
+    label { font-size:13px; display:block; margin-bottom:6px; }
+    textarea { width:100%; min-height:140px; margin-bottom:10px; }
+    .buttons { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:16px 0; }
+    button { padding:8px; border-radius:6px; cursor:pointer; }
+    footer { margin-top:20px; font-size:12px; color:var(--muted); text-align:center; }
+    footer a { color:#22d3ee; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>命名規則変換ツール（Naming Convention Converter Tool）</h1>
+      <div class="tools">
+        <label for="theme">テーマ:</label>
+        <select id="theme">
+          <option value="auto">自動</option>
+          <option value="light">ライト</option>
+          <option value="dark">ダーク</option>
+        </select>
+      </div>
+    </header>
+
+    <section class="panel">
+      <label for="input">入力</label>
+      <textarea id="input" placeholder="例: hello world / FooBar / SNAKE_CASE"></textarea>
+
+      <div class="buttons">
+        <button id="btn-upper">大文字に変換</button>
+        <button id="btn-lower">小文字に変換</button>
+        <button id="btn-camel-lower">ラクダ文字（先頭小文字）</button>
+        <button id="btn-camel-upper">ラクダ文字（先頭大文字）</button>
+        <button id="btn-snake-l">スネーク文字（小文字）</button>
+        <button id="btn-snake-u">スネーク文字（大文字）</button>
+        <button id="btn-kebab-l">ケバブ文字（小文字）</button>
+        <button id="btn-kebab-u">ケバブ文字（大文字）</button>
+      </div>
+
+      <label for="output">出力</label>
+      <textarea id="output" readonly></textarea>
+    </section>
+
+    <footer>
+      <p>MIT License | <a href="https://github.com/grachro" target="_blank">https://github.com/grachro</a></p>
+    </footer>
+  </div>
+
+<script>
+  const $ = (s)=>document.querySelector(s);
+  const input=$('#input'), output=$('#output');
+
+  // ---- Compatibility: feature-detect for Unicode property escapes ----
+  const HAS_UNICODE_PROPERTY = (() => {
+    try { new RegExp("\\p{L}", "u"); return true; } catch { return false; }
+  })();
+  const SEP_RE = HAS_UNICODE_PROPERTY ? /[^\p{L}0-9]+/u : /[^A-Za-z0-9]+/;
+
+  // ---- Word splitting (robust, camelCase & digits boundaries) ----
+  function toWords(line){
+    if (!line) return [];
+    const spaced = line
+      .replace(/([a-z0-9])([A-Z])/g,'$1 $2')       // aB -> a B
+      .replace(/([A-Z])([A-Z][a-z])/g,'$1 $2')     // HTMLParser -> HTML Parser
+      .replace(/([A-Za-z])([0-9])/g,'$1 $2')       // a1 -> a 1
+      .replace(/([0-9])([A-Za-z])/g,'$1 $2');      // 1a -> 1 a
+    return spaced.split(SEP_RE).filter(Boolean);
+  }
+
+  function perLine(text, fn){ return text.split(/\r?\n/).map(fn).join('\n'); }
+
+  // ---- Transforms ----
+  const actions={
+    'btn-upper': t=>t.toUpperCase(),
+    'btn-lower': t=>t.toLowerCase(),
+    'btn-camel-lower': camelLower,
+    'btn-camel-upper': camelUpper,
+    'btn-snake-l': t=>perLine(t, l=>toWords(l).map(s=>s.toLowerCase()).join('_')),
+    'btn-snake-u': t=>perLine(t, l=>toWords(l).map(s=>s.toUpperCase()).join('_')),
+    'btn-kebab-l': t=>perLine(t, l=>toWords(l).map(s=>s.toLowerCase()).join('-')),
+    'btn-kebab-u': t=>perLine(t, l=>toWords(l).map(s=>s.toUpperCase()).join('-')),
+  };
+
+  function camelLower(text){
+    return perLine(text, (line)=>{
+      const w=toWords(line);
+      if(!w.length) return '';
+      return w[0].toLowerCase() + w.slice(1).map(s=>s[0].toUpperCase()+s.slice(1).toLowerCase()).join('');
+    });
+  }
+  function camelUpper(text){
+    return perLine(text, (line)=>{
+      const w=toWords(line);
+      if(!w.length) return '';
+      return w.map(s=>s[0].toUpperCase()+s.slice(1).toLowerCase()).join('');
+    });
+  }
+
+  Object.keys(actions).forEach(id=>{
+    document.getElementById(id)?.addEventListener('click', ()=>{
+      output.value = actions[id](input.value);
+      output.scrollTop = 0;
+    });
+  });
+
+  // ---- Theme handling (auto removes attribute) ----
+  const themeSel = document.getElementById('theme');
+  function applyTheme(v){
+    if (v === 'light' || v === 'dark') {
+      document.documentElement.setAttribute('data-theme', v);
+    } else {
+      document.documentElement.removeAttribute('data-theme'); // auto
+    }
+  }
+  themeSel?.addEventListener('change', ()=> applyTheme(themeSel.value));
+  // optional: persist
+  (()=>{ try{
+      const k='ncc-theme'; const saved=localStorage.getItem(k);
+      if (saved) { themeSel.value=saved; applyTheme(saved); }
+      themeSel.addEventListener('change', ()=>localStorage.setItem(k, themeSel.value));
+    }catch{} })();
+</script>
+
+</body>
+</html>
